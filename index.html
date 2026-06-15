@@ -253,7 +253,7 @@ const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let currentUser = null;
 let currentRound = 1;
 let teamData = {};
-let realtimeChannel = null;
+let pollInterval = null;
 
 function fmt(n) { return Math.round(n).toLocaleString(); }
 function initials(name) { return name.split(' ').filter(w=>w.length>2).slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
@@ -342,18 +342,24 @@ function renderTeamDashboard(code) {
 }
 
 function subscribeRealtime(code) {
-  if (realtimeChannel) sb.removeChannel(realtimeChannel);
-  realtimeChannel = sb.channel('teams-changes')
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams' }, payload => {
-      const row = payload.new;
-      teamData[row.code] = { balance: row.balance, history: row.history || [], round: row.round || 1 };
-      currentRound = row.round || currentRound;
-      if (row.code === code) {
+  if (pollInterval) clearInterval(pollInterval);
+  let lastBalance = teamData[code]?.balance ?? STARTING_BALANCE;
+  pollInterval = setInterval(async () => {
+    try {
+      const { data, error } = await sb.from('teams').select('*').eq('code', code).single();
+      if (error || !data) return;
+      teamData[code] = { balance: data.balance, history: data.history || [], round: data.round || 1 };
+      currentRound = data.round || currentRound;
+      document.getElementById('topbar-round').textContent = `Round ${currentRound}`;
+      if (data.balance !== lastBalance) {
+        lastBalance = data.balance;
         renderTeamDashboard(code);
         showToast('Vault updated!');
       }
-    })
-    .subscribe();
+      // update online status
+      document.querySelector('.live-badge').innerHTML = '<span class="live-dot"></span> Live';
+    } catch(e) {}
+  }, 3000);
 }
 
 // ── Admin view ──
@@ -367,16 +373,17 @@ function showAdmin() {
 }
 
 function subscribeAdminRealtime() {
-  if (realtimeChannel) sb.removeChannel(realtimeChannel);
-  realtimeChannel = sb.channel('admin-teams-changes')
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams' }, payload => {
-      const row = payload.new;
-      teamData[row.code] = { balance: row.balance, history: row.history || [], round: row.round || 1 };
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    try {
+      const { data, error } = await sb.from('teams').select('*');
+      if (error || !data) return;
+      data.forEach(row => { teamData[row.code] = { balance: row.balance, history: row.history || [], round: row.round || 1 }; });
       renderAdminSummary();
       renderAdminTable();
       if (document.getElementById('tab-leaderboard').classList.contains('active')) renderLeaderboard();
-    })
-    .subscribe();
+    } catch(e) {}
+  }, 3000);
 }
 
 async function setRound(r) {
@@ -476,7 +483,7 @@ function renderLeaderboard() {
 }
 
 function logout() {
-  if (realtimeChannel) sb.removeChannel(realtimeChannel);
+  if (pollInterval) clearInterval(pollInterval);
   currentUser = null;
   document.getElementById('team-screen').style.display='none';
   document.getElementById('admin-screen').style.display='none';
