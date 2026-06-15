@@ -5,18 +5,29 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>The Arcane Economy — Guild Vault</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Inter:wght@300;400;500&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   :root {
     --gold: #C9A84C; --gold-light: #E8D08A; --gold-dark: #8B6914;
     --parchment: #F5EDD6; --parchment-dark: #E8D9B0;
-    --ink: #1C1409; --bg-dark: #0E0B06;
+    --ink: #1C1409; --ink-mid: #3D2E10; --ink-light: #6B5120;
+    --red: #8B1A1A; --green: #1A5C2A;
+    --bg-dark: #0E0B06; --bg-mid: #1A1409;
   }
   html, body { height: 100%; }
   body { font-family: 'Crimson Pro', Georgia, serif; background: var(--bg-dark); color: var(--parchment); min-height: 100vh; overflow-x: hidden; }
   body::before { content: ''; position: fixed; inset: 0; background: radial-gradient(ellipse 80% 50% at 50% 0%, rgba(201,168,76,0.08) 0%, transparent 70%), radial-gradient(ellipse 60% 40% at 80% 100%, rgba(139,26,26,0.06) 0%, transparent 60%); pointer-events: none; z-index: 0; }
   .page { position: relative; z-index: 1; }
-  #login-screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center; }
+
+  /* LOADING */
+  #loading-screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1rem; }
+  .spinner { width: 40px; height: 40px; border: 2px solid rgba(201,168,76,0.2); border-top-color: var(--gold); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-family: 'Cinzel', serif; font-size: 0.8rem; letter-spacing: 0.15em; color: var(--gold-light); opacity: 0.6; }
+
+  /* LOGIN */
+  #login-screen { min-height: 100vh; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 2rem; text-align: center; }
   .crest { width: 80px; height: 80px; border: 1.5px solid var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem; font-size: 2rem; color: var(--gold); background: rgba(201,168,76,0.08); }
   .login-title { font-family: 'Cinzel', serif; font-size: clamp(1.6rem, 5vw, 2.4rem); font-weight: 700; color: var(--gold); letter-spacing: 0.04em; line-height: 1.2; margin-bottom: 0.4rem; }
   .login-sub { font-size: 1.1rem; color: var(--parchment-dark); font-style: italic; margin-bottom: 2.5rem; opacity: 0.8; }
@@ -29,8 +40,10 @@
   .btn-primary:hover { background: var(--gold-light); }
   .btn-primary:active { transform: scale(0.98); }
   .error-msg { font-size: 0.9rem; color: #E07070; margin-top: 0.75rem; min-height: 1.2rem; font-style: italic; }
-  .admin-link { margin-top: 2rem; font-size: 0.8rem; color: rgba(245,237,214,0.3); cursor: pointer; text-decoration: underline; font-family: 'Inter', sans-serif; }
+  .admin-link { margin-top: 2rem; font-size: 0.8rem; color: rgba(245,237,214,0.3); cursor: pointer; text-decoration: underline; font-family: 'Inter', sans-serif; background: none; border: none; }
   .admin-link:hover { color: rgba(245,237,214,0.6); }
+
+  /* TEAM DASHBOARD */
   #team-screen { display: none; min-height: 100vh; }
   .topbar { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid rgba(201,168,76,0.15); background: rgba(14,11,6,0.8); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 10; }
   .topbar-title { font-family: 'Cinzel', serif; font-size: 0.85rem; letter-spacing: 0.1em; color: var(--gold); }
@@ -49,6 +62,9 @@
   .balance-unit { font-size: 1rem; color: var(--gold-light); opacity: 0.7; font-style: italic; }
   .balance-change { margin-top: 1rem; font-size: 1rem; font-style: italic; }
   .balance-change.pos { color: #6DBF82; } .balance-change.neg { color: #E07070; } .balance-change.neutral { color: rgba(245,237,214,0.4); }
+  .live-badge { display: inline-flex; align-items: center; gap: 5px; font-family: 'Inter', sans-serif; font-size: 0.7rem; color: #6DBF82; background: rgba(26,92,42,0.2); border: 1px solid rgba(109,191,130,0.3); border-radius: 20px; padding: 2px 8px; margin-bottom: 1rem; }
+  .live-dot { width: 6px; height: 6px; background: #6DBF82; border-radius: 50%; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
   .section-title { font-family: 'Cinzel', serif; font-size: 0.75rem; letter-spacing: 0.15em; color: var(--gold-light); opacity: 0.7; margin-bottom: 1rem; display: flex; align-items: center; gap: 0.75rem; }
   .section-title::after { content: ''; flex: 1; height: 1px; background: rgba(201,168,76,0.15); }
   .history-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 2rem; }
@@ -59,12 +75,14 @@
   .history-amount.pos { color: #6DBF82; } .history-amount.neg { color: #E07070; }
   .history-balance { font-family: 'Inter', sans-serif; font-size: 0.75rem; color: rgba(245,237,214,0.4); text-align: right; width: 80px; }
   .empty-history { text-align: center; padding: 2rem; font-style: italic; color: rgba(245,237,214,0.3); font-size: 1rem; }
+
+  /* ADMIN */
   #admin-screen { display: none; min-height: 100vh; }
   .admin-topbar { display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.5rem; border-bottom: 1px solid rgba(201,168,76,0.15); background: rgba(14,11,6,0.9); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 10; flex-wrap: wrap; gap: 0.5rem; }
   .admin-title { font-family: 'Cinzel', serif; font-size: 1rem; color: var(--gold); letter-spacing: 0.08em; }
-  .round-control { display: flex; align-items: center; gap: 8px; font-family: 'Inter', sans-serif; font-size: 0.8rem; color: rgba(245,237,214,0.6); }
-  .round-control select { background: rgba(245,237,214,0.08); border: 1px solid rgba(201,168,76,0.3); border-radius: 6px; padding: 4px 8px; color: var(--parchment); font-size: 0.8rem; font-family: 'Inter', sans-serif; outline: none; cursor: pointer; }
-  .admin-content { padding: 1.5rem; max-width: 900px; margin: 0 auto; }
+  .round-control { display: flex; align-items: center; gap: 8px; font-family: 'Inter', sans-serif; font-size: 0.8rem; color: rgba(245,237,214,0.6); flex-wrap: wrap; }
+  .round-control select { background: rgba(245,237,214,0.08); border: 1px solid rgba(201,168,76,0.3); border-radius: 6px; padding: 4px 8px; color: var(--parchment); font-size: 0.8rem; outline: none; cursor: pointer; }
+  .admin-content { padding: 1.5rem; max-width: 1000px; margin: 0 auto; }
   .admin-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
   .summary-card { background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.15); border-radius: 8px; padding: 0.75rem 1rem; }
   .summary-card-label { font-family: 'Cinzel', serif; font-size: 0.65rem; letter-spacing: 0.12em; color: var(--gold-light); opacity: 0.6; margin-bottom: 0.25rem; }
@@ -81,7 +99,7 @@
   .adjust-cell { display: flex; align-items: center; gap: 6px; }
   .adj-input { width: 80px; background: rgba(245,237,214,0.06); border: 1px solid rgba(201,168,76,0.2); border-radius: 4px; padding: 4px 6px; color: var(--parchment); font-size: 0.8rem; font-family: 'Inter', sans-serif; outline: none; text-align: center; }
   .adj-input:focus { border-color: var(--gold); }
-  .adj-note { width: 120px; background: rgba(245,237,214,0.06); border: 1px solid rgba(201,168,76,0.2); border-radius: 4px; padding: 4px 6px; color: var(--parchment); font-size: 0.8rem; font-family: 'Crimson Pro', serif; font-style: italic; outline: none; }
+  .adj-note { width: 130px; background: rgba(245,237,214,0.06); border: 1px solid rgba(201,168,76,0.2); border-radius: 4px; padding: 4px 6px; color: var(--parchment); font-size: 0.8rem; font-family: 'Crimson Pro', serif; font-style: italic; outline: none; }
   .adj-note:focus { border-color: var(--gold); }
   .btn-add { background: rgba(26,92,42,0.4); border: 1px solid rgba(109,191,130,0.3); border-radius: 4px; padding: 4px 10px; color: #6DBF82; font-size: 0.75rem; font-family: 'Cinzel', serif; cursor: pointer; transition: background 0.15s; white-space: nowrap; }
   .btn-add:hover { background: rgba(26,92,42,0.6); }
@@ -89,14 +107,7 @@
   .btn-sub:hover { background: rgba(139,26,26,0.6); }
   .btn-reset-all { background: none; border: 1px solid rgba(201,168,76,0.3); border-radius: 6px; padding: 5px 14px; color: var(--gold-light); font-size: 0.75rem; font-family: 'Cinzel', serif; cursor: pointer; transition: background 0.15s; letter-spacing: 0.06em; }
   .btn-reset-all:hover { background: rgba(201,168,76,0.1); }
-  .lb-row { display: flex; align-items: center; gap: 12px; padding: 0.6rem 0.75rem; border-bottom: 1px solid rgba(201,168,76,0.07); border-radius: 6px; transition: background 0.15s; }
-  .lb-row:hover { background: rgba(201,168,76,0.04); }
-  .lb-rank { font-family: 'Cinzel', serif; font-size: 0.8rem; width: 32px; text-align: center; color: rgba(245,237,214,0.4); }
-  .lb-rank.r1 { color: #C9A84C; font-size: 1rem; } .lb-rank.r2 { color: #A8A8A8; } .lb-rank.r3 { color: #CD7F32; }
-  .lb-code { font-family: 'Cinzel', serif; font-size: 0.7rem; color: var(--gold-light); background: rgba(201,168,76,0.1); border-radius: 3px; padding: 1px 5px; width: 36px; text-align: center; }
-  .lb-name { flex: 1; font-size: 0.95rem; color: var(--parchment-dark); }
-  .lb-bal { font-family: 'Cinzel', serif; font-size: 0.95rem; font-weight: 600; color: var(--gold); }
-  .tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(201,168,76,0.15); padding-bottom: 0; }
+  .tabs { display: flex; gap: 4px; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(201,168,76,0.15); }
   .tab-btn { font-family: 'Cinzel', serif; font-size: 0.72rem; letter-spacing: 0.1em; padding: 6px 16px; background: none; border: none; color: rgba(245,237,214,0.4); cursor: pointer; border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s; margin-bottom: -1px; }
   .tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
   .tab-btn:hover { color: var(--parchment); }
@@ -105,16 +116,27 @@
   .search-bar input { flex: 1; min-width: 160px; background: rgba(245,237,214,0.05); border: 1px solid rgba(201,168,76,0.2); border-radius: 6px; padding: 6px 10px; color: var(--parchment); font-size: 0.85rem; font-family: 'Crimson Pro', serif; outline: none; }
   .search-bar input:focus { border-color: var(--gold); }
   .search-bar input::placeholder { color: rgba(245,237,214,0.25); }
-  .sync-indicator { font-family: 'Inter', sans-serif; font-size: 0.7rem; color: rgba(245,237,214,0.3); display: flex; align-items: center; gap: 4px; }
-  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: #6DBF82; }
-  .sync-dot.syncing { background: var(--gold); animation: pulse 1s infinite; }
-  .sync-dot.error { background: #E07070; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-  @media (max-width: 600px) { .adj-note { display: none; } .admin-content { padding: 1rem; } .teams-table th:nth-child(4), .teams-table td:nth-child(4) { display: none; } }
+  .lb-row { display: flex; align-items: center; gap: 12px; padding: 0.6rem 0.75rem; border-bottom: 1px solid rgba(201,168,76,0.07); border-radius: 6px; transition: background 0.15s; }
+  .lb-row:hover { background: rgba(201,168,76,0.04); }
+  .lb-rank { font-family: 'Cinzel', serif; font-size: 0.8rem; width: 32px; text-align: center; color: rgba(245,237,214,0.4); }
+  .lb-rank.r1 { color: #C9A84C; font-size: 1rem; } .lb-rank.r2 { color: #A8A8A8; } .lb-rank.r3 { color: #CD7F32; }
+  .lb-code { font-family: 'Cinzel', serif; font-size: 0.7rem; color: var(--gold-light); background: rgba(201,168,76,0.1); border-radius: 3px; padding: 1px 5px; width: 36px; text-align: center; }
+  .lb-name { flex: 1; font-size: 0.95rem; color: var(--parchment-dark); }
+  .lb-bal { font-family: 'Cinzel', serif; font-size: 0.95rem; font-weight: 600; color: var(--gold); }
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: rgba(26,92,42,0.9); border: 1px solid rgba(109,191,130,0.4); border-radius: 8px; padding: 0.75rem 1.25rem; font-family: 'Cinzel', serif; font-size: 0.8rem; color: #6DBF82; letter-spacing: 0.08em; z-index: 100; transform: translateY(100px); opacity: 0; transition: all 0.3s; pointer-events: none; }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.error { background: rgba(139,26,26,0.9); border-color: rgba(224,112,112,0.4); color: #E07070; }
+  @media (max-width: 600px) { .adj-note { display: none; } .admin-content { padding: 1rem; } }
 </style>
 </head>
 <body>
 <div class="page">
+
+<!-- LOADING -->
+<div id="loading-screen">
+  <div class="spinner"></div>
+  <div class="loading-text">Opening the vaults...</div>
+</div>
 
 <!-- LOGIN -->
 <div id="login-screen">
@@ -124,27 +146,27 @@
   <div class="login-card">
     <label for="code-input">Enter your guild code</label>
     <input id="code-input" type="text" placeholder="e.g. G01" maxlength="20" autocomplete="off" autocapitalize="characters" />
-    <button class="btn-primary" id="login-btn" onclick="doLogin()">Open Vault</button>
+    <button class="btn-primary" onclick="doLogin()">Open Vault</button>
     <p class="error-msg" id="login-error"></p>
   </div>
-  <p class="admin-link" onclick="showAdminLogin()">Game Master access</p>
+  <button class="admin-link" onclick="promptAdmin()">Game Master access</button>
 </div>
 
-<!-- TEAM -->
+<!-- TEAM DASHBOARD -->
 <div id="team-screen">
   <div class="topbar">
     <span class="topbar-title">⚜ The Arcane Economy</span>
     <span class="topbar-round" id="topbar-round">Round 1</span>
-    <div style="display:flex;align-items:center;gap:10px">
-      <div class="sync-indicator"><div class="sync-dot" id="team-sync-dot"></div><span id="team-sync-label">Live</span></div>
-      <button class="logout-btn" onclick="logout()">Leave vault</button>
-    </div>
+    <button class="logout-btn" onclick="logout()">Leave vault</button>
   </div>
   <div class="dashboard">
     <div class="guild-hero">
       <div class="guild-avatar" id="team-avatar"></div>
-      <div class="guild-name" id="team-name"></div>
+      <div class="guild-name" id="team-name-display"></div>
       <div class="guild-code" id="team-code-display"></div>
+    </div>
+    <div style="text-align:center;margin-bottom:1rem">
+      <span class="live-badge"><span class="live-dot"></span> Live</span>
     </div>
     <div class="balance-display">
       <div class="balance-label">VAULT BALANCE</div>
@@ -171,7 +193,6 @@
         <option value="5">Round 5</option><option value="6">Round 6</option>
       </select>
       <button class="btn-reset-all" onclick="resetAll()">Reset all</button>
-      <div class="sync-indicator"><div class="sync-dot" id="admin-sync-dot"></div><span id="admin-sync-label">Live</span></div>
       <button class="logout-btn" onclick="logout()">Exit</button>
     </div>
   </div>
@@ -182,230 +203,257 @@
       <button class="tab-btn" onclick="switchAdminTab('leaderboard',this)">Leaderboard</button>
     </div>
     <div class="tab-panel active" id="tab-vaults">
-      <div class="search-bar"><input type="text" placeholder="Search guild..." id="admin-search" oninput="renderAdminTable()" /></div>
+      <div class="search-bar">
+        <input type="text" placeholder="Search guild..." id="admin-search" oninput="renderAdminTable()" />
+      </div>
       <table class="teams-table">
         <thead><tr><th>Code</th><th>Guild</th><th>Balance</th><th>Change</th><th>Adjust</th></tr></thead>
         <tbody id="admin-tbody"></tbody>
       </table>
     </div>
-    <div class="tab-panel" id="tab-leaderboard"><div id="admin-leaderboard"></div></div>
+    <div class="tab-panel" id="tab-leaderboard">
+      <div id="admin-leaderboard"></div>
+    </div>
   </div>
 </div>
 
+<div class="toast" id="toast"></div>
+
 </div>
-
 <script>
-// ── CONFIG ──────────────────────────────────────────────────────────────────
-// Replace this URL with your own Firebase Realtime Database URL.
-// Free tier at https://console.firebase.google.com — create a project,
-// enable Realtime Database, set rules to public for testing, copy the URL below.
-const FIREBASE_URL = 'https://game-ae128-default-rtdb.asia-southeast1.firebasedatabase.app/arcane.json';
-// ────────────────────────────────────────────────────────────────────────────
-
+const SUPABASE_URL = 'https://mqhtshhxyuqszzhlpuch.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1xaHRzaHh4eXVxc3p6aGxwdWNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE0OTA2MzgsImV4cCI6MjA5NzA2NjYzOH0._nHXKt_tLBUO8zadrBum3Gv7squAekIGF0IZ1b_xW_A';
 const ADMIN_CODE = 'GAMEMASTER';
 const STARTING_BALANCE = 1000;
-const POLL_MS = 5000;
 
 const TEAMS = [
-  {code:'G01',name:'Guild of the Golden Snitch'},{code:'G02',name:'Order of the Silver Wand'},
-  {code:'G03',name:'House of Enchanted Returns'},{code:'G04',name:'The Gringotts Gang'},
-  {code:'G05',name:'Nimbus Investment Co.'},{code:'G06',name:'The Alchemist Alliance'},
-  {code:'G07',name:'Phoenix Feather Fund'},{code:'G08',name:'Dragonheart Capital'},
-  {code:'G09',name:'The Sorting Hat Society'},{code:'G10',name:"Merlin's Market Makers"},
-  {code:'G11',name:'The Hippogriff Hedge'},{code:'G12',name:'Cursed Coin Collective'},
-  {code:'G13',name:'Lumos Equity Group'},{code:'G14',name:'The Pensieve Partners'},
-  {code:'G15',name:'Floo Network Finance'},{code:'G16',name:"The Marauder's Portfolio"},
-  {code:'G17',name:'Basilisk Bond Brokers'},{code:'G18',name:'The Elder Wand Exchange'},
-  {code:'G19',name:'Patronus Profit Guild'},{code:'G20',name:'The Time-Turner Traders'},
+  {code:'G01',name:'Guild of the Golden Snitch'},
+  {code:'G02',name:'Order of the Silver Wand'},
+  {code:'G03',name:'House of Enchanted Returns'},
+  {code:'G04',name:'The Gringotts Gang'},
+  {code:'G05',name:'Nimbus Investment Co.'},
+  {code:'G06',name:'The Alchemist Alliance'},
+  {code:'G07',name:'Phoenix Feather Fund'},
+  {code:'G08',name:'Dragonheart Capital'},
+  {code:'G09',name:'The Sorting Hat Society'},
+  {code:'G10',name:"Merlin's Market Makers"},
+  {code:'G11',name:'The Hippogriff Hedge'},
+  {code:'G12',name:'Cursed Coin Collective'},
+  {code:'G13',name:'Lumos Equity Group'},
+  {code:'G14',name:'The Pensieve Partners'},
+  {code:'G15',name:'Floo Network Finance'},
+  {code:'G16',name:"The Marauder's Portfolio"},
+  {code:'G17',name:'Basilisk Bond Brokers'},
+  {code:'G18',name:'The Elder Wand Exchange'},
+  {code:'G19',name:'Patronus Profit Guild'},
+  {code:'G20',name:'The Time-Turner Traders'},
 ];
 
-let state = null, currentUser = null, pollTimer = null;
-
-function initState() {
-  const teams = {};
-  TEAMS.forEach(t => { teams[t.code] = {balance: STARTING_BALANCE, history: []}; });
-  return {teams, round: 1};
-}
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let currentUser = null;
+let currentRound = 1;
+let teamData = {};
+let realtimeChannel = null;
 
 function fmt(n) { return Math.round(n).toLocaleString(); }
 function initials(name) { return name.split(' ').filter(w=>w.length>2).slice(0,2).map(w=>w[0]).join('').toUpperCase(); }
 
-function setSyncStatus(role, status) {
-  const dot = document.getElementById(role+'-sync-dot');
-  const lbl = document.getElementById(role+'-sync-label');
-  if (!dot||!lbl) return;
-  dot.className = 'sync-dot'+(status==='syncing'?' syncing':status==='error'?' error':'');
-  lbl.textContent = status==='syncing'?'Syncing…':status==='error'?'Offline':'Live';
+function showToast(msg, isError=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast' + (isError ? ' error' : '') + ' show';
+  setTimeout(() => t.className = 'toast', 2500);
 }
 
-async function loadRemote() {
+// ── Init ──
+async function init() {
   try {
-    const r = await fetch(FIREBASE_URL);
-    if (!r.ok) return null;
-    const data = await r.json();
-    return data || null;
-  } catch(e) { return null; }
-}
+    const { data, error } = await sb.from('teams').select('*');
+    if (error) throw error;
 
-async function saveRemote(s) {
-  try {
-    const r = await fetch(FIREBASE_URL, {
-      method: 'PUT',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify(s)
-    });
-    return r.ok;
-  } catch(e) { return false; }
-}
-
-async function initApp() {
-  const remote = await loadRemote();
-  state = remote || initState();
-  if (!remote) await saveRemote(state);
-}
-
-function startPolling() {
-  stopPolling();
-  pollTimer = setInterval(async () => {
-    if (!currentUser) return;
-    const role = currentUser==='ADMIN'?'admin':'team';
-    setSyncStatus(role,'syncing');
-    const remote = await loadRemote();
-    setSyncStatus(role, remote?'live':'error');
-    if (!remote) return;
-    state = remote;
-    if (currentUser==='ADMIN') {
-      document.getElementById('admin-round').value = state.round;
-      renderAdminSummary(); renderAdminTable();
+    if (!data || data.length === 0) {
+      // Seed all teams
+      const rows = TEAMS.map(t => ({ code: t.code, name: t.name, balance: STARTING_BALANCE, history: [], round: 1 }));
+      const { error: insertError } = await sb.from('teams').insert(rows);
+      if (insertError) throw insertError;
+      TEAMS.forEach(t => { teamData[t.code] = { balance: STARTING_BALANCE, history: [], round: 1 }; });
     } else {
-      document.getElementById('topbar-round').textContent = 'Round '+state.round;
-      renderTeamDashboard(currentUser);
+      data.forEach(row => { teamData[row.code] = { balance: row.balance, history: row.history || [], round: row.round || 1 }; });
+      // Get current round from any row
+      if (data[0]) currentRound = data[0].round || 1;
     }
-  }, POLL_MS);
+  } catch(e) {
+    console.error(e);
+  }
+  document.getElementById('loading-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
 }
 
-function stopPolling() { if (pollTimer) { clearInterval(pollTimer); pollTimer=null; } }
-
-async function doLogin() {
+// ── Login ──
+function doLogin() {
   const raw = document.getElementById('code-input').value.trim();
   const code = raw.toUpperCase();
   const err = document.getElementById('login-error');
-  const btn = document.getElementById('login-btn');
   err.textContent = '';
-  if (!code) { err.textContent='Please enter a guild code.'; return; }
-  btn.textContent='Opening…';
-  await initApp();
-  btn.textContent='Open Vault';
-  if (code===ADMIN_CODE) { currentUser='ADMIN'; showAdmin(); return; }
-  const team = TEAMS.find(t=>t.code===code);
-  if (!team) { err.textContent='"'+raw+'" is not a valid code. Codes are G01–G20.'; return; }
-  currentUser=code; showTeam(team);
+  if (!code) { err.textContent = 'Please enter a guild code.'; return; }
+  if (code === ADMIN_CODE) { currentUser = 'ADMIN'; showAdmin(); return; }
+  const team = TEAMS.find(t => t.code === code);
+  if (!team) { err.textContent = `"${raw}" is not recognised. Codes are G01–G20.`; return; }
+  currentUser = code;
+  showTeam(team);
 }
 
-document.getElementById('code-input').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+document.getElementById('code-input').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+function promptAdmin() { document.getElementById('code-input').value=''; document.getElementById('code-input').placeholder='Enter GM code'; document.getElementById('code-input').focus(); }
 
-function showAdminLogin() {
-  document.getElementById('code-input').value='';
-  document.getElementById('code-input').placeholder='Enter GM code';
-  document.getElementById('code-input').focus();
-}
-
+// ── Team view ──
 function showTeam(team) {
-  document.getElementById('login-screen').style.display='none';
-  document.getElementById('team-screen').style.display='block';
-  renderTeamDashboard(team.code); startPolling();
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('team-screen').style.display = 'block';
+  renderTeamDashboard(team.code);
+  subscribeRealtime(team.code);
 }
 
 function renderTeamDashboard(code) {
-  const team = TEAMS.find(t=>t.code===code);
-  const data = state.teams[code];
+  const team = TEAMS.find(t => t.code === code);
+  const data = teamData[code] || { balance: STARTING_BALANCE, history: [] };
   const diff = data.balance - STARTING_BALANCE;
   document.getElementById('team-avatar').textContent = initials(team.name);
-  document.getElementById('team-name').textContent = team.name;
+  document.getElementById('team-name-display').textContent = team.name;
   document.getElementById('team-code-display').textContent = code;
   document.getElementById('team-balance').textContent = fmt(data.balance);
-  document.getElementById('topbar-round').textContent = 'Round '+state.round;
-  const ch = document.getElementById('team-change');
-  if (diff===0) { ch.textContent='No transactions yet'; ch.className='balance-change neutral'; }
-  else if (diff>0) { ch.textContent='+'+fmt(diff)+' BBA since the game began'; ch.className='balance-change pos'; }
-  else { ch.textContent=fmt(diff)+' BBA since the game began'; ch.className='balance-change neg'; }
+  document.getElementById('topbar-round').textContent = `Round ${currentRound}`;
+  const changeEl = document.getElementById('team-change');
+  if (diff === 0) { changeEl.textContent = 'No transactions yet'; changeEl.className = 'balance-change neutral'; }
+  else if (diff > 0) { changeEl.textContent = `+${fmt(diff)} BBA since the game began`; changeEl.className = 'balance-change pos'; }
+  else { changeEl.textContent = `${fmt(diff)} BBA since the game began`; changeEl.className = 'balance-change neg'; }
   const list = document.getElementById('history-list');
-  if (!data.history || data.history.length===0) {
-    list.innerHTML='<div class="empty-history">Your vault is untouched. Invest wisely.</div>'; return;
+  if (!data.history || data.history.length === 0) {
+    list.innerHTML = '<div class="empty-history">Your vault is untouched. Invest wisely.</div>';
+  } else {
+    list.innerHTML = [...data.history].reverse().map(h => `
+      <div class="history-item">
+        <div class="history-round">Round ${h.round}</div>
+        <div class="history-note">${h.note || 'Adjustment'}</div>
+        <div class="history-amount ${h.change>0?'pos':'neg'}">${h.change>0?'+':''}${fmt(h.change)}</div>
+        <div class="history-balance">${fmt(h.balance)} BBA</div>
+      </div>`).join('');
   }
-  list.innerHTML = [...data.history].reverse().map(h=>`
-    <div class="history-item">
-      <div class="history-round">Round ${h.round}</div>
-      <div class="history-note">${h.note||'Adjustment'}</div>
-      <div class="history-amount ${h.change>0?'pos':'neg'}">${h.change>0?'+':''}${fmt(h.change)}</div>
-      <div class="history-balance">${fmt(h.balance)} BBA</div>
-    </div>`).join('');
 }
 
+function subscribeRealtime(code) {
+  if (realtimeChannel) sb.removeChannel(realtimeChannel);
+  realtimeChannel = sb.channel('teams-changes')
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams' }, payload => {
+      const row = payload.new;
+      teamData[row.code] = { balance: row.balance, history: row.history || [], round: row.round || 1 };
+      currentRound = row.round || currentRound;
+      if (row.code === code) {
+        renderTeamDashboard(code);
+        showToast('Vault updated!');
+      }
+    })
+    .subscribe();
+}
+
+// ── Admin view ──
 function showAdmin() {
-  document.getElementById('login-screen').style.display='none';
-  document.getElementById('admin-screen').style.display='block';
-  document.getElementById('admin-round').value=state.round;
-  renderAdminSummary(); renderAdminTable(); startPolling();
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('admin-screen').style.display = 'block';
+  document.getElementById('admin-round').value = currentRound;
+  renderAdminSummary();
+  renderAdminTable();
+  subscribeAdminRealtime();
+}
+
+function subscribeAdminRealtime() {
+  if (realtimeChannel) sb.removeChannel(realtimeChannel);
+  realtimeChannel = sb.channel('admin-teams-changes')
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'teams' }, payload => {
+      const row = payload.new;
+      teamData[row.code] = { balance: row.balance, history: row.history || [], round: row.round || 1 };
+      renderAdminSummary();
+      renderAdminTable();
+      if (document.getElementById('tab-leaderboard').classList.contains('active')) renderLeaderboard();
+    })
+    .subscribe();
 }
 
 async function setRound(r) {
-  state.round=parseInt(r);
-  setSyncStatus('admin','syncing');
-  const ok=await saveRemote(state);
-  setSyncStatus('admin',ok?'live':'error');
-  renderAdminSummary();
+  currentRound = parseInt(r);
+  // Update all teams with new round number
+  const { error } = await sb.from('teams').update({ round: currentRound }).neq('code', '');
+  if (error) { showToast('Failed to update round', true); return; }
+  showToast(`Round ${currentRound} started!`);
 }
 
 function renderAdminSummary() {
-  const bals=TEAMS.map(t=>state.teams[t.code].balance);
-  const total=bals.reduce((a,b)=>a+b,0);
-  document.getElementById('admin-summary').innerHTML=`
+  const balances = TEAMS.map(t => (teamData[t.code]?.balance ?? STARTING_BALANCE));
+  const total = balances.reduce((a,b)=>a+b,0);
+  const avg = Math.round(total/balances.length);
+  const max = Math.max(...balances);
+  const min = Math.min(...balances);
+  document.getElementById('admin-summary').innerHTML = `
     <div class="summary-card"><div class="summary-card-label">Total Wealth</div><div class="summary-card-value">${fmt(total)}</div></div>
-    <div class="summary-card"><div class="summary-card-label">Average</div><div class="summary-card-value">${fmt(Math.round(total/bals.length))}</div></div>
-    <div class="summary-card"><div class="summary-card-label">Highest</div><div class="summary-card-value">${fmt(Math.max(...bals))}</div></div>
-    <div class="summary-card"><div class="summary-card-label">Lowest</div><div class="summary-card-value">${fmt(Math.min(...bals))}</div></div>`;
+    <div class="summary-card"><div class="summary-card-label">Average</div><div class="summary-card-value">${fmt(avg)}</div></div>
+    <div class="summary-card"><div class="summary-card-label">Highest</div><div class="summary-card-value">${fmt(max)}</div></div>
+    <div class="summary-card"><div class="summary-card-label">Lowest</div><div class="summary-card-value">${fmt(min)}</div></div>`;
 }
 
 function renderAdminTable() {
-  const q=(document.getElementById('admin-search')?.value||'').toLowerCase();
-  const filtered=TEAMS.filter(t=>t.name.toLowerCase().includes(q)||t.code.toLowerCase().includes(q));
-  document.getElementById('admin-tbody').innerHTML=filtered.map(t=>{
-    const d=state.teams[t.code].balance-STARTING_BALANCE;
-    const dStr=d===0?'<span class="change-cell neutral">—</span>':d>0?'<span class="change-cell pos">+'+fmt(d)+'</span>':'<span class="change-cell neg">'+fmt(d)+'</span>';
-    return '<tr><td><span class="team-code-badge">'+t.code+'</span></td><td class="team-name-cell">'+t.name+'</td><td class="balance-cell">'+fmt(state.teams[t.code].balance)+'</td><td>'+dStr+'</td><td><div class="adjust-cell"><input class="adj-input" type="number" id="amt-'+t.code+'" placeholder="Amt" min="0" /><input class="adj-note" type="text" id="note-'+t.code+'" placeholder="Reason..." /><button class="btn-add" onclick="adjust(\''+t.code+'\',1)">+ Add</button><button class="btn-sub" onclick="adjust(\''+t.code+'\',-1)">− Deduct</button></div></td></tr>';
+  const q = (document.getElementById('admin-search')?.value||'').toLowerCase();
+  const filtered = TEAMS.filter(t=>t.name.toLowerCase().includes(q)||t.code.toLowerCase().includes(q));
+  document.getElementById('admin-tbody').innerHTML = filtered.map(t => {
+    const bal = teamData[t.code]?.balance ?? STARTING_BALANCE;
+    const d = bal - STARTING_BALANCE;
+    const dStr = d===0?`<span class="change-cell neutral">—</span>`:d>0?`<span class="change-cell pos">+${fmt(d)}</span>`:`<span class="change-cell neg">${fmt(d)}</span>`;
+    return `<tr>
+      <td><span class="team-code-badge">${t.code}</span></td>
+      <td class="team-name-cell">${t.name}</td>
+      <td class="balance-cell">${fmt(bal)}</td>
+      <td>${dStr}</td>
+      <td><div class="adjust-cell">
+        <input class="adj-input" type="number" id="amt-${t.code}" placeholder="Amt" min="0" />
+        <input class="adj-note" type="text" id="note-${t.code}" placeholder="Reason..." />
+        <button class="btn-add" onclick="adjust('${t.code}',1)">+ Add</button>
+        <button class="btn-sub" onclick="adjust('${t.code}',-1)">− Deduct</button>
+      </div></td>
+    </tr>`;
   }).join('');
 }
 
 async function adjust(code, sign) {
-  const amtEl=document.getElementById('amt-'+code);
-  const noteEl=document.getElementById('note-'+code);
-  const amt=parseFloat(amtEl.value);
+  const amtEl = document.getElementById(`amt-${code}`);
+  const noteEl = document.getElementById(`note-${code}`);
+  const amt = parseFloat(amtEl.value);
   if (!amt||isNaN(amt)||amt<=0) { amtEl.focus(); return; }
-  const note=noteEl.value.trim()||(sign>0?'Round return':'Round loss');
-  const change=Math.round(sign*amt);
-  const data=state.teams[code];
-  data.balance=Math.max(0,data.balance+change);
-  data.history.push({round:state.round,change:change,balance:data.balance,note:note});
-  setSyncStatus('admin','syncing');
-  const ok=await saveRemote(state);
-  setSyncStatus('admin',ok?'live':'error');
+  const note = noteEl.value.trim()||(sign>0?'Round return':'Round loss');
+  const change = Math.round(sign*amt);
+  const data = teamData[code] || { balance: STARTING_BALANCE, history: [] };
+  const newBalance = Math.max(0, data.balance + change);
+  const newHistory = [...(data.history||[]), { round: currentRound, change, balance: newBalance, note }];
+  const { error } = await sb.from('teams').update({ balance: newBalance, history: newHistory, round: currentRound }).eq('code', code);
+  if (error) { showToast('Update failed!', true); return; }
+  teamData[code] = { balance: newBalance, history: newHistory, round: currentRound };
   amtEl.value=''; noteEl.value='';
-  renderAdminSummary(); renderAdminTable(); renderLeaderboard();
+  showToast(`${code} updated!`);
+  renderAdminSummary();
+  renderAdminTable();
 }
 
 async function resetAll() {
   if (!confirm('Reset ALL guild balances to 1,000 BBA? This cannot be undone.')) return;
-  TEAMS.forEach(t=>{ state.teams[t.code].balance=STARTING_BALANCE; state.teams[t.code].history=[]; });
-  state.round=1;
-  document.getElementById('admin-round').value=1;
-  setSyncStatus('admin','syncing');
-  const ok=await saveRemote(state);
-  setSyncStatus('admin',ok?'live':'error');
-  renderAdminSummary(); renderAdminTable(); renderLeaderboard();
+  const updates = TEAMS.map(t => sb.from('teams').update({ balance: STARTING_BALANCE, history: [], round: 1 }).eq('code', t.code));
+  await Promise.all(updates);
+  TEAMS.forEach(t => { teamData[t.code] = { balance: STARTING_BALANCE, history: [], round: 1 }; });
+  currentRound = 1;
+  document.getElementById('admin-round').value = 1;
+  showToast('All vaults reset!');
+  renderAdminSummary();
+  renderAdminTable();
 }
 
-function switchAdminTab(tab,btn) {
+function switchAdminTab(tab, btn) {
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
   btn.classList.add('active');
@@ -414,19 +462,22 @@ function switchAdminTab(tab,btn) {
 }
 
 function renderLeaderboard() {
-  const sorted=[...TEAMS].sort((a,b)=>state.teams[b.code].balance-state.teams[a.code].balance);
-  const medals=['🥇','🥈','🥉'];
-  document.getElementById('admin-leaderboard').innerHTML=sorted.map((t,i)=>`
-    <div class="lb-row">
+  const sorted = [...TEAMS].sort((a,b)=>(teamData[b.code]?.balance??STARTING_BALANCE)-(teamData[a.code]?.balance??STARTING_BALANCE));
+  const medals = ['🥇','🥈','🥉'];
+  document.getElementById('admin-leaderboard').innerHTML = sorted.map((t,i) => {
+    const bal = teamData[t.code]?.balance ?? STARTING_BALANCE;
+    return `<div class="lb-row">
       <div class="lb-rank ${i<3?'r'+(i+1):''}">${i<3?medals[i]:i+1}</div>
       <div class="lb-code">${t.code}</div>
       <div class="lb-name">${t.name}</div>
-      <div class="lb-bal">${fmt(state.teams[t.code].balance)} BBA</div>
-    </div>`).join('');
+      <div class="lb-bal">${fmt(bal)} BBA</div>
+    </div>`;
+  }).join('');
 }
 
 function logout() {
-  stopPolling(); currentUser=null; state=null;
+  if (realtimeChannel) sb.removeChannel(realtimeChannel);
+  currentUser = null;
   document.getElementById('team-screen').style.display='none';
   document.getElementById('admin-screen').style.display='none';
   document.getElementById('login-screen').style.display='flex';
@@ -434,6 +485,8 @@ function logout() {
   document.getElementById('code-input').placeholder='e.g. G01';
   document.getElementById('login-error').textContent='';
 }
+
+init();
 </script>
 </body>
 </html>
